@@ -1,0 +1,46 @@
+# Binaries
+/barrage
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Build output
+/bin/
+/dist/
+/build/
+
+# Go coverage and profiling
+*.out
+coverage.html
+*.coverprofile
+*.prof
+*.pprof
+
+# Go workspace
+go.work
+go.work.sum
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Debug and temp
+tmp/
+debug
