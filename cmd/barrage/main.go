@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"slices"
@@ -34,16 +36,41 @@ func main() {
 		bodyBytes = []byte(bodyStr)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: workerCount, 
+		IdleConnTimeout:     30 * time.Second,
+	}
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: transport,
+	}
 	start := time.Now()
 	results := runLoadTest(client, url, method, bodyBytes, totalRequests, workerCount)
 	stats := ComputeStats(results, time.Since(start))
+	shown := 0
+	for _, r := range results {
+		if r.Category == CategoryConnection && shown < 5 {
+			fmt.Println("sample error:", r.Error)
+			shown++
+		}
+	}
 	PrintReport(stats)
 }
 
+type ErrorCategory int
+
+const (
+	CategoryNone ErrorCategory = iota
+	CategoryTimeout
+	CategoryConnection
+	CategoryClientError
+	CategoryServerError
+)
+
 type Result struct {
 	Error      error         `json:"error"`
+	Category   ErrorCategory `json:"category"`
 	Latency    time.Duration `json:"latency"`
 	StatusCode int           `json:"status_code"`
 }
@@ -56,11 +83,18 @@ func doRequest(client *http.Client, url string, method string, body []byte) Resu
 	}
 	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
-		return Result{Error: err, Latency: time.Since(start), StatusCode: 0}
+		return Result{Error: err, Latency: time.Since(start), Category: CategoryConnection}
 	}
+	var netErr net.Error
 	resp, err := client.Do(req)
 	if err != nil {
-		return Result{Error: err, Latency: time.Since(start), StatusCode: 0}
+		category := CategoryConnection
+		if errors.As(err, &netErr) {
+			if netErr.Timeout() {
+				category = CategoryTimeout
+			}
+		}
+		return Result{Error: err, Latency: time.Since(start), Category: category}
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -68,7 +102,15 @@ func doRequest(client *http.Client, url string, method string, body []byte) Resu
 		}
 	}()
 	_, _ = io.Copy(io.Discard, resp.Body)
-	return Result{Error: nil, Latency: time.Since(start), StatusCode: resp.StatusCode}
+
+	category := CategoryNone
+	switch {
+	case resp.StatusCode >= 500:
+		category = CategoryServerError
+	case resp.StatusCode >= 400:
+		category = CategoryClientError
+	}
+	return Result{Latency: time.Since(start), StatusCode: resp.StatusCode, Category: category}
 }
 
 func runLoadTest(client *http.Client, url string, method string, body []byte, totalRequests, workerCount int) []Result {
@@ -107,6 +149,10 @@ type Stats struct {
 	TotalRequests     int
 	SuccessCount      int
 	ErrorCount        int
+	TimeoutCount      int
+	ConnectionErrors  int
+	ClientErrorCount  int
+	ServerErrorCount  int
 	MinLatency        time.Duration
 	MaxLatency        time.Duration
 	AverageLatency    time.Duration
@@ -132,6 +178,7 @@ func ComputeStats(results []Result, elapsed time.Duration) Stats {
 		return Stats{}
 	}
 	var successCount, errorCount int
+	var timeoutCount, connectionErrors, clientErrorCount, serverErrorCount int
 	latencies := make([]time.Duration, 0, totalRequests)
 	var sumLatency time.Duration
 
@@ -139,6 +186,16 @@ func ComputeStats(results []Result, elapsed time.Duration) Stats {
 		if isSuccess(result) {
 			successCount++
 		} else {
+			switch result.Category {
+			case CategoryTimeout:
+				timeoutCount++
+			case CategoryConnection:
+				connectionErrors++
+			case CategoryClientError:
+				clientErrorCount++
+			case CategoryServerError:
+				serverErrorCount++
+			}
 			errorCount++
 		}
 		latencies = append(latencies, result.Latency)
@@ -148,6 +205,10 @@ func ComputeStats(results []Result, elapsed time.Duration) Stats {
 	averageLatency := sumLatency / time.Duration(totalRequests)
 	requestsPerSecond := float64(totalRequests) / elapsed.Seconds()
 	return Stats{
+		TimeoutCount:      timeoutCount,
+		ConnectionErrors:  connectionErrors,
+		ClientErrorCount:  clientErrorCount,
+		ServerErrorCount:  serverErrorCount,
 		TotalRequests:     totalRequests,
 		SuccessCount:      successCount,
 		ErrorCount:        errorCount,
@@ -165,6 +226,11 @@ func PrintReport(stats Stats) {
 	successRate := float64(stats.SuccessCount) / float64(stats.TotalRequests) * 100
 	errorRate := float64(stats.ErrorCount) / float64(stats.TotalRequests) * 100
 
+	fmt.Println("  Breakdown:")
+	fmt.Printf("    Timeouts:           %d\n", stats.TimeoutCount)
+	fmt.Printf("    Connection errors:  %d\n", stats.ConnectionErrors)
+	fmt.Printf("    4xx responses:      %d\n", stats.ClientErrorCount)
+	fmt.Printf("    5xx responses:      %d\n", stats.ServerErrorCount)
 	fmt.Printf("Total requests:      %d\n", stats.TotalRequests)
 	fmt.Printf("Successful:          %d (%.1f%%)\n", stats.SuccessCount, successRate)
 	fmt.Printf("Failed:              %d (%.1f%%)\n", stats.ErrorCount, errorRate)
