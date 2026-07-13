@@ -3,26 +3,41 @@ package main
 import (
 	"bytes"
 	"cmp"
-	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"slices"
 	"sync"
 	"time"
 )
 
 func main() {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+	var url, method, bodyStr string
+	var totalRequests, workerCount int
+
+	flag.StringVar(&url, "url", "", "target URL (required)")
+	flag.StringVar(&method, "method", "GET", "http method")
+	flag.StringVar(&bodyStr, "body", "", "request body (raw JSON)")
+	flag.IntVar(&totalRequests, "requests", 20, "total requests")
+	flag.IntVar(&workerCount, "workers", 5, "worker count")
+	flag.Parse()
+
+	if url == "" {
+		fmt.Println("url is required")
+		os.Exit(1)
 	}
-	url := "http://localhost:8080/v1/markets"
-	method := "GET"
-	totalRequests := 20
-	workerCount := 5
+
+	var bodyBytes []byte
+	if bodyStr != "" {
+		bodyBytes = []byte(bodyStr)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
 	start := time.Now()
-	results := runLoadTest(client, url, method, nil, totalRequests, workerCount)
-	fmt.Println(results)
+	results := runLoadTest(client, url, method, bodyBytes, totalRequests, workerCount)
 	stats := ComputeStats(results, time.Since(start))
 	PrintReport(stats)
 }
@@ -33,52 +48,30 @@ type Result struct {
 	StatusCode int           `json:"status_code"`
 }
 
-func doRequest(client *http.Client, url string, method string, body any) Result {
+func doRequest(client *http.Client, url string, method string, body []byte) Result {
 	start := time.Now()
 	var bodyReader io.Reader
 	if body != nil {
-		bodyBytes, err := json.Marshal(body)
-		if err != nil {
-			return Result{
-				Error:      err,
-				Latency:    time.Since(start),
-				StatusCode: 0,
-			}
-		}
-		bodyReader = bytes.NewReader(bodyBytes)
-	} else {
-		bodyReader = nil
+		bodyReader = bytes.NewReader(body)
 	}
 	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
-		return Result{
-			Error:      err,
-			Latency:    time.Since(start),
-			StatusCode: 0,
-		}
+		return Result{Error: err, Latency: time.Since(start), StatusCode: 0}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return Result{
-			Error:      err,
-			Latency:    time.Since(start),
-			StatusCode: 0,
-		}
+		return Result{Error: err, Latency: time.Since(start), StatusCode: 0}
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			fmt.Println("error closing response body:", err)
 		}
 	}()
-	return Result{
-		Error:      nil,
-		Latency:    time.Since(start),
-		StatusCode: resp.StatusCode,
-	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return Result{Error: nil, Latency: time.Since(start), StatusCode: resp.StatusCode}
 }
 
-func runLoadTest(client *http.Client, url string, method string, body any, totalRequests, workerCount int) []Result {
+func runLoadTest(client *http.Client, url string, method string, body []byte, totalRequests, workerCount int) []Result {
 	start := time.Now()
 	jobs := make(chan struct{}, totalRequests)
 	results := make(chan Result, totalRequests)
@@ -143,10 +136,10 @@ func ComputeStats(results []Result, elapsed time.Duration) Stats {
 	var sumLatency time.Duration
 
 	for _, result := range results {
-		if result.Error != nil {
-			errorCount++
-		} else {
+		if isSuccess(result) {
 			successCount++
+		} else {
+			errorCount++
 		}
 		latencies = append(latencies, result.Latency)
 		sumLatency += result.Latency
@@ -184,4 +177,8 @@ func PrintReport(stats Stats) {
 	fmt.Printf("p99:                 %s\n", stats.Percentile99.Round(time.Microsecond*10))
 	fmt.Println()
 	fmt.Printf("Requests/sec:        %.2f\n", stats.RequestsPerSecond)
+}
+
+func isSuccess(r Result) bool {
+	return r.Error == nil && r.StatusCode >= 200 && r.StatusCode < 300
 }
