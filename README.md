@@ -4,14 +4,14 @@ A lightweight, concurrent HTTP load testing tool written in Go.
 
 `barrage` fires a controlled stream of concurrent requests at an HTTP endpoint and reports latency, throughput, and error statistics — built to understand real-world concurrency patterns from the inside out, not just to use them.
 
-> Status: early development (v0.1). Not production-ready yet.
+> Status: early development (v0.2). Not production-ready yet.
 
 ## Why
 
 Most load testing tools are black boxes. `barrage` is built from scratch to:
 - Be simple enough to read and extend for your own use cases
-- Support custom payloads, headers, and auth tokens out of the box
-- Serve as a hands-on exploration of Go concurrency (goroutines, channels, context, generics)
+- Support custom payloads out of the box
+- Serve as a hands-on exploration of Go concurrency (goroutines, channels, worker pools, generics)
 
 ## Installation
 
@@ -30,52 +30,69 @@ go build -o barrage ./cmd/barrage
 ## Usage
 
 ```bash
-barrage -url https://api.example.com/orders \
-        -method POST \
-        -body '{"symbol":"BTCUSDT","amount":10}' \
-        -header "Authorization: Bearer <token>" \
-        -rate 100 \
-        -duration 30s \
-        -workers 50
+barrage -url http://localhost:8080/v1/markets \
+        -method GET \
+        -requests 5000 \
+        -workers 20 \
+        -rate 100
 ```
 
 ### Flags
 
-| Flag        | Description                                      | Default |
-|-------------|---------------------------------------------------|---------|
-| `-url`      | Target URL (required)                              | —       |
-| `-method`   | HTTP method                                        | `GET`   |
-| `-body`     | Request body (raw string or `@file.json`)          | —       |
-| `-header`   | Request header, repeatable (`-header "K: V"`)      | —       |
-| `-rate`     | Requests per second                                | `10`    |
-| `-duration` | Total test duration (e.g. `30s`, `2m`)             | `10s`   |
-| `-workers`  | Max concurrent in-flight requests                  | `10`    |
+| Flag        | Description                                        | Default |
+|-------------|-----------------------------------------------------|---------|
+| `-url`      | Target URL (required)                                | —       |
+| `-method`   | HTTP method                                          | `GET`   |
+| `-body`     | Request body (raw JSON string)                       | —       |
+| `-requests` | Total number of requests to send                     | `20`    |
+| `-workers`  | Max concurrent in-flight requests                    | `5`     |
+| `-rate`     | Requests per second (`0` = as fast as workers allow) | `0`     |
 
 ### Example output
 
 ```
-Total requests:       3000
-Successful (2xx):     2950 (98.3%)
-Failed:                 50 (1.7%)
-Avg latency:           45ms
-p50:                   38ms
-p95:                  120ms
-p99:                  310ms
-Max latency:           890ms
-Requests/sec:         99.8
+Total requests:      5000
+Successful:          4987 (99.7%)
+Failed:                 13 (0.3%)
+  Breakdown:
+    Timeouts:             9
+    Connection errors:    0
+    4xx responses:        0
+    5xx responses:        4
+
+Min latency:         320µs
+Avg latency:         3.1ms
+Max latency:         9.98s
+p50:                 890µs
+p95:                 12.4ms
+p99:                 41.2ms
+
+Requests/sec:        1420.55
 ```
 
 ## Roadmap
 
-- [x] v0.1 — Fixed worker pool, sequential requests, basic latency report (min/avg/max)
-- [ ] v0.2 — Rate limiting (`-rate`) and duration-based runs (`-duration`)
-- [ ] v0.3 — Percentile stats (p50/p95/p99), JSON output format
-- [ ] v0.4 — Graceful shutdown via context, error classification (timeout / connection refused / 4xx / 5xx)
+- [x] v0.1 — Fixed worker pool, latency report (min/avg/max), percentile stats (p50/p95/p99)
+- [x] v0.1 — Error classification (timeout / connection error / 4xx / 5xx)
+- [x] v0.2 — Rate limiting (`-rate`) via a ticker-fed job queue
+- [ ] v0.3 — Duration-based runs (`-duration`, run for a fixed time instead of a fixed count)
+- [ ] v0.4 — JSON output format
 - [ ] v0.5 — Live terminal dashboard, custom payload templates
+
+## Testing
+
+```bash
+go test ./... -race
+```
+
+Covers:
+- Table-driven tests for the generic `Percentile` function and `ComputeStats`
+- `httptest`-based tests for `DoRequest` across success / 4xx / 5xx paths
+- A goroutine-leak test (via [goleak](https://github.com/uber-go/goleak)) verifying the worker pool cleans up correctly
 
 ## How it works
 
-`barrage` uses a fixed-size worker pool of goroutines to bound concurrency, a rate limiter to control request pacing, and a fan-in pattern to collect results from workers into a single aggregator without data races. See the code for the full breakdown — this project is meant to be read, not just run.
+`barrage` uses a fixed-size worker pool of goroutines to bound concurrency, an optional `time.Ticker`-based feeder to pace jobs at a target rate, and a fan-in pattern to collect results from workers into a single aggregator without data races. See the code for the full breakdown — this project is meant to be read, not just run.
 
 ## Contributing
 
