@@ -15,12 +15,13 @@ import (
 func main() {
 	var url, method, bodyStr string
 	var totalRequests, workerCount int
-
+	var rate int
 	flag.StringVar(&url, "url", "", "target URL (required)")
 	flag.StringVar(&method, "method", "GET", "http method")
 	flag.StringVar(&bodyStr, "body", "", "request body (raw JSON)")
 	flag.IntVar(&totalRequests, "requests", 20, "total requests")
 	flag.IntVar(&workerCount, "workers", 5, "worker count")
+	flag.IntVar(&rate, "rate", 0, "requests per second")
 	flag.Parse()
 
 	if url == "" {
@@ -44,7 +45,7 @@ func main() {
 	}
 
 	start := time.Now()
-	results := runner.RunLoadTest(httpClient, url, method, bodyBytes, totalRequests, workerCount)
+	results := runner.RunLoadTest(httpClient, url, method, bodyBytes, totalRequests, workerCount, rate)
 
 	shown := 0
 	for _, r := range results {
