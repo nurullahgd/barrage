@@ -27,15 +27,34 @@ cd barrage
 go build -o barrage ./cmd/barrage
 ```
 
+## Quick start
+
+```bash
+# Terminal 1 — start the bundled mock server
+go run ./cmd/mockserver -port 8090 -latency 5ms
+
+# Terminal 2 — run barrage against it
+go run ./cmd/barrage -url http://localhost:8090 -requests 1000 -workers 20
+```
+
 ## Usage
 
 ```bash
-barrage -url http://localhost:8080/v1/markets \
+barrage -url http://localhost:8090\
         -method GET \
         -requests 5000 \
         -workers 20 \
         -rate 100
 ```
+
+
+**Mock server flags:**
+
+| Flag           | Description                              | Default |
+|----------------|------------------------------------------|---------|
+| `-port`        | Port to listen on                        | `8090`  |
+| `-latency`     | Simulated response latency (e.g. `10ms`) | `0`     |
+| `-error-rate`  | Fraction of requests returning 500 (e.g. `0.05` for 5%) | `0` |
 
 ### Flags
 
