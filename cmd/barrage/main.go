@@ -16,14 +16,15 @@ import (
 
 func main() {
 	var url, method, bodyStr string
-	var totalRequests, workerCount int
-	var rate int
+	var totalRequests, workerCount, rate int
+	var duration time.Duration
 	flag.StringVar(&url, "url", "", "target URL (required)")
 	flag.StringVar(&method, "method", "GET", "http method")
 	flag.StringVar(&bodyStr, "body", "", "request body (raw JSON)")
 	flag.IntVar(&totalRequests, "requests", 20, "total requests")
 	flag.IntVar(&workerCount, "workers", 5, "worker count")
 	flag.IntVar(&rate, "rate", 0, "requests per second")
+	flag.DurationVar(&duration, "duration", 0, "test duration (e.g. 30s, 2m); 0 = run until requests are exhausted")
 	flag.Parse()
 
 	if url == "" {
@@ -49,6 +50,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	if duration > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, duration)
+		defer cancel()
+	}
+	
 	start := time.Now()
 	results := runner.RunLoadTest(ctx, httpClient, url, method, bodyBytes, totalRequests, workerCount, rate)
 
