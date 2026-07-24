@@ -4,7 +4,7 @@ A lightweight, concurrent HTTP load testing tool written in Go.
 
 `barrage` fires a controlled stream of concurrent requests at an HTTP endpoint and reports latency, throughput, and error statistics — built to understand real-world concurrency patterns from the inside out, not just to use them.
 
-> Status: early development (v0.2). Not production-ready yet.
+> Status: early development (v0.3). Not production-ready yet.
 
 ## Why
 
@@ -47,6 +47,7 @@ barrage -url http://localhost:8080/v1/markets \
 | `-requests` | Total number of requests to send                     | `20`    |
 | `-workers`  | Max concurrent in-flight requests                    | `5`     |
 | `-rate`     | Requests per second (`0` = as fast as workers allow) | `0`     |
+| `-duration` | Test duration (e.g. `30s`, `2m`); `0` = run until requests are exhausted | `0` |
 
 ### Example output
 
@@ -75,7 +76,7 @@ Requests/sec:        1420.55
 - [x] v0.1 — Fixed worker pool, latency report (min/avg/max), percentile stats (p50/p95/p99)
 - [x] v0.1 — Error classification (timeout / connection error / 4xx / 5xx)
 - [x] v0.2 — Rate limiting (`-rate`) via a ticker-fed job queue
-- [ ] v0.3 — Duration-based runs (`-duration`, run for a fixed time instead of a fixed count)
+- [x] v0.3 — Duration-based runs (`-duration`) + graceful shutdown on Ctrl+C
 - [ ] v0.4 — JSON output format
 - [ ] v0.5 — Live terminal dashboard, custom payload templates
 
