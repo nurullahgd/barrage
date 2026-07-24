@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
@@ -8,7 +9,7 @@ import (
 	"github.com/nurullahgd/barrage.git/internal/client"
 )
 
-func RunLoadTest(httpClient *http.Client, url string, method string, body []byte, totalRequests, workerCount, rate int) []client.Result {
+func RunLoadTest(ctx context.Context, httpClient *http.Client, url string, method string, body []byte, totalRequests, workerCount, rate int) []client.Result {
 	jobs := make(chan struct{}, totalRequests)
 	results := make(chan client.Result, totalRequests)
 	var wg sync.WaitGroup
@@ -26,7 +27,11 @@ func RunLoadTest(httpClient *http.Client, url string, method string, body []byte
 		defer close(jobs)
 		if rate <= 0 {
 			for i := 0; i < totalRequests; i++ {
-				jobs <- struct{}{}
+				select {
+				case <-ctx.Done():
+					return
+				case jobs <- struct{}{}:
+				}
 			}
 			return
 		}
@@ -34,8 +39,16 @@ func RunLoadTest(httpClient *http.Client, url string, method string, body []byte
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for i := 0; i < totalRequests; i++ {
-			<-ticker.C
-			jobs <- struct{}{}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case jobs <- struct{}{}:
+			}
 		}
 	}()
 	go func() {

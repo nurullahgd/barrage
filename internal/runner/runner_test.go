@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,5 +18,5 @@ func TestRunLoadTest_NoGoroutineLeak(t *testing.T) {
 	defer server.Close()
 
 	httpClient := &http.Client{}
-	_ = RunLoadTest(httpClient, server.URL, "GET", nil, 50, 5, 0)
+	_ = RunLoadTest(context.Background(), httpClient, server.URL, "GET", nil, 50, 5, 0)
 }

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/nurullahgd/barrage.git/internal/client"
@@ -44,8 +46,11 @@ func main() {
 		Transport: transport,
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	start := time.Now()
-	results := runner.RunLoadTest(httpClient, url, method, bodyBytes, totalRequests, workerCount, rate)
+	results := runner.RunLoadTest(ctx, httpClient, url, method, bodyBytes, totalRequests, workerCount, rate)
 
 	shown := 0
 	for _, r := range results {
