@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	var url, method, bodyStr string
+	var url, method, bodyStr, format string
 	var totalRequests, workerCount, rate int
 	var duration time.Duration
 	flag.StringVar(&url, "url", "", "target URL (required)")
@@ -25,6 +25,7 @@ func main() {
 	flag.IntVar(&workerCount, "workers", 5, "worker count")
 	flag.IntVar(&rate, "rate", 0, "requests per second")
 	flag.DurationVar(&duration, "duration", 0, "test duration (e.g. 30s, 2m); 0 = run until requests are exhausted")
+	flag.StringVar(&format, "format", "text", "output format: text or json")
 	flag.Parse()
 
 	if url == "" {
@@ -55,7 +56,7 @@ func main() {
 		ctx, cancel = context.WithTimeout(ctx, duration)
 		defer cancel()
 	}
-	
+
 	start := time.Now()
 	results := runner.RunLoadTest(ctx, httpClient, url, method, bodyBytes, totalRequests, workerCount, rate)
 
@@ -68,5 +69,13 @@ func main() {
 	}
 
 	s := stats.ComputeStats(results, time.Since(start))
-	stats.PrintReport(s)
+	switch format {
+	case "json":
+		if err := stats.PrintJSONReport(s); err != nil {
+			fmt.Println("error: ", err)
+			os.Exit(1)
+		}
+	default:
+		stats.PrintReport(s)
+	}
 }

@@ -2,7 +2,10 @@ package stats
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
+	"math"
+	"os"
 	"sort"
 	"time"
 
@@ -24,6 +27,31 @@ type Stats struct {
 	Percentile95      time.Duration
 	Percentile99      time.Duration
 	RequestsPerSecond float64
+}
+
+type JSONReport struct {
+	TotalRequests  int            `json:"total_requests"`
+	Successful     int            `json:"successful"`
+	Failed         int            `json:"failed"`
+	ErrorBreakdown ErrorBreakdown `json:"error_breakdown"`
+	Latency        LatencyReport  `json:"latency"`
+	RequestsPerSec float64        `json:"requests_per_sec"`
+}
+
+type ErrorBreakdown struct {
+	Timeouts         int `json:"timeouts"`
+	ConnectionErrors int `json:"connection_errors"`
+	ClientErrors     int `json:"client_errors"`
+	ServerErrors     int `json:"server_errors"`
+}
+
+type LatencyReport struct {
+	Min float64 `json:"min"`
+	Avg float64 `json:"avg"`
+	Max float64 `json:"max"`
+	P50 float64 `json:"p50"`
+	P95 float64 `json:"p95"`
+	P99 float64 `json:"p99"`
 }
 
 func Percentile[T cmp.Ordered](sorted []T, p float64) T {
@@ -116,4 +144,37 @@ func PrintReport(stats Stats) {
 	fmt.Printf("p99:                 %s\n", stats.Percentile99.Round(time.Microsecond*10))
 	fmt.Println()
 	fmt.Printf("Requests/sec:        %.2f\n", stats.RequestsPerSecond)
+}
+func round6(v float64) float64 {
+	return math.Round(v*1e6) / 1e6
+}
+
+func (s Stats) ToJSON() JSONReport {
+	return JSONReport{
+		TotalRequests: s.TotalRequests,
+		Successful:    s.SuccessCount,
+		Failed:        s.ErrorCount,
+		ErrorBreakdown: ErrorBreakdown{
+			Timeouts:         s.TimeoutCount,
+			ConnectionErrors: s.ConnectionErrors,
+			ClientErrors:     s.ClientErrorCount,
+			ServerErrors:     s.ServerErrorCount,
+		},
+		Latency: LatencyReport{
+			Min: round6(s.MinLatency.Seconds()),
+			Avg: round6(s.AverageLatency.Seconds()),
+			Max: round6(s.MaxLatency.Seconds()),
+			P50: round6(s.Percentile50.Seconds()),
+			P95: round6(s.Percentile95.Seconds()),
+			P99: round6(s.Percentile99.Seconds()),
+		},
+		RequestsPerSec: s.RequestsPerSecond,
+	}
+}
+
+func PrintJSONReport(s Stats) error {
+	report := s.ToJSON()
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(report)
 }
