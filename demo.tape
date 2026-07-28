@@ -1,15 +1,14 @@
-# demo.tape
 Output demo.gif
 
 Set FontSize 14
-Set Width 800
-Set Height 500
+Set Width 900
+Set Height 600
 Set Theme "Dracula"
 
-Type "go run ./cmd/mockserver -port 8090 -latency 5ms -error-rate 0.02 &"
+Type "go run ./cmd/mockserver -port 8090 -latency 2ms -error-rate 0.05 &"
 Enter
 Sleep 500ms
 
-Type "go run ./cmd/barrage -url http://localhost:8090 -requests 500 -workers 20 -rate 80"
+Type "go run ./cmd/barrage -url http://localhost:8090 -requests 1000 -workers 20 -rate 100"
 Enter
-Sleep 8s
+Sleep 12s

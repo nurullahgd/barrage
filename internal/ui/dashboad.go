@@ -21,6 +21,25 @@ var (
 	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
+type bucket struct {
+	label string
+	max   time.Duration
+	count int
+}
+
+func newBuckets() []bucket {
+	return []bucket{
+		{"0-1ms", 1 * time.Millisecond, 0},
+		{"1-2ms", 2 * time.Millisecond, 0},
+		{"2-5ms", 5 * time.Millisecond, 0},
+		{"5-10ms", 10 * time.Millisecond, 0},
+		{"10-25ms", 25 * time.Millisecond, 0},
+		{"25-50ms", 50 * time.Millisecond, 0},
+		{"50-100ms", 100 * time.Millisecond, 0},
+		{"100ms+", 0, 0},
+	}
+}
+
 type Model struct {
 	Total       int
 	Successful  int
@@ -32,6 +51,7 @@ type Model struct {
 	Workers     int
 	Rate        int
 	TotalTarget int
+	Buckets     []bucket
 }
 
 type ResultMsg client.Result
@@ -45,6 +65,7 @@ func NewModel(url string, workers, rate, total int) Model {
 		Rate:        rate,
 		TotalTarget: total,
 		Latencies:   make([]time.Duration, 0, total),
+		Buckets:     newBuckets(),
 	}
 }
 
@@ -63,6 +84,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Failed++
 		}
 		m.Latencies = append(m.Latencies, r.Latency)
+		for i := range m.Buckets {
+			if m.Buckets[i].max == 0 || r.Latency <= m.Buckets[i].max {
+				m.Buckets[i].count++
+				break
+			}
+		}
 		return m, nil
 	case DoneMsg:
 		m.Done = true
@@ -74,6 +101,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m Model) histogramView() string {
+	if m.Total == 0 {
+		return ""
+	}
+
+	maxCount := 0
+	for _, b := range m.Buckets {
+		if b.count > maxCount {
+			maxCount = b.count
+		}
+	}
+	if maxCount == 0 {
+		return ""
+	}
+
+	const barWidth = 20
+	var sb strings.Builder
+	sb.WriteString(labelStyle.Render("  Distribution"))
+	sb.WriteString("\n")
+
+	for _, b := range m.Buckets {
+		if b.count == 0 {
+			continue
+		}
+		filled := int(float64(b.count) / float64(maxCount) * barWidth)
+		empty := barWidth - filled
+		pct := float64(b.count) / float64(m.Total) * 100
+
+		bar := successStyle.Render(strings.Repeat("█", filled)) +
+			dimStyle.Render(strings.Repeat("░", empty))
+
+		sb.WriteString(fmt.Sprintf("  %-9s [%s] %4d (%.0f%%)\n",
+			b.label, bar, b.count, pct))
+	}
+	return sb.String()
 }
 
 func (m Model) View() string {
@@ -129,7 +193,8 @@ func (m Model) View() string {
 	sb.WriteString("\n")
 
 	// latency
-	sb.WriteString(labelStyle.Render("  Latency\n"))
+	sb.WriteString(labelStyle.Render("  Latency"))
+	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("    %s  %s\n",
 		labelStyle.Render("p50"),
 		valueStyle.Render(m.p(50).Round(time.Microsecond*10).String())))
@@ -140,6 +205,7 @@ func (m Model) View() string {
 		labelStyle.Render("p99"),
 		valueStyle.Render(m.p(99).Round(time.Microsecond*10).String())))
 
+	sb.WriteString(m.histogramView())
 	sb.WriteString("\n")
 	sb.WriteString(dimStyle.Render(fmt.Sprintf("  elapsed %s", elapsed)))
 	sb.WriteString("\n")
