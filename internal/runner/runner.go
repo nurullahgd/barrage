@@ -9,9 +9,9 @@ import (
 	"github.com/nurullahgd/barrage.git/internal/client"
 )
 
-func RunLoadTest(ctx context.Context, httpClient *http.Client, url string, method string, body []byte, totalRequests, workerCount, rate int) []client.Result {
+func RunLoadTest(ctx context.Context, httpClient *http.Client, url string, method string, body []byte, totalRequests, workerCount, rate int) <-chan client.Result {
 	jobs := make(chan struct{}, totalRequests)
-	results := make(chan client.Result, totalRequests)
+	results := make(chan client.Result, workerCount)
 	var wg sync.WaitGroup
 
 	for i := 0; i < workerCount; i++ {
@@ -23,6 +23,7 @@ func RunLoadTest(ctx context.Context, httpClient *http.Client, url string, metho
 			}
 		}()
 	}
+
 	go func() {
 		defer close(jobs)
 		if rate <= 0 {
@@ -51,13 +52,11 @@ func RunLoadTest(ctx context.Context, httpClient *http.Client, url string, metho
 			}
 		}
 	}()
+
 	go func() {
 		defer close(results)
 		wg.Wait()
 	}()
-	resultsSlice := make([]client.Result, 0, totalRequests)
-	for r := range results {
-		resultsSlice = append(resultsSlice, r)
-	}
-	return resultsSlice
+
+	return results
 }

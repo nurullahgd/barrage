@@ -9,9 +9,11 @@ import (
 	"os/signal"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nurullahgd/barrage.git/internal/client"
 	"github.com/nurullahgd/barrage.git/internal/runner"
 	"github.com/nurullahgd/barrage.git/internal/stats"
+	"github.com/nurullahgd/barrage.git/internal/ui"
 )
 
 func main() {
@@ -25,7 +27,7 @@ func main() {
 	flag.IntVar(&workerCount, "workers", 5, "worker count")
 	flag.IntVar(&rate, "rate", 0, "requests per second")
 	flag.DurationVar(&duration, "duration", 0, "test duration (e.g. 30s, 2m); 0 = run until requests are exhausted")
-	flag.StringVar(&format, "format", "text", "output format: text or json")
+	flag.StringVar(&format, "format", "dashboard", "output format: dashboard, text, json")
 	flag.Parse()
 
 	if url == "" {
@@ -58,23 +60,45 @@ func main() {
 	}
 
 	start := time.Now()
-	results := runner.RunLoadTest(ctx, httpClient, url, method, bodyBytes, totalRequests, workerCount, rate)
+	resultCh := runner.RunLoadTest(ctx, httpClient, url, method, bodyBytes, totalRequests, workerCount, rate)
 
-	shown := 0
-	for _, r := range results {
-		if r.Category == client.CategoryConnection && shown < 5 {
-			fmt.Println("sample error:", r.Error)
-			shown++
+	var allResults []client.Result
+
+	switch format {
+	case "dashboard":
+		p := tea.NewProgram(ui.NewModel(url, workerCount, rate, totalRequests))
+		go func() {
+			for r := range resultCh {
+				allResults = append(allResults, r)
+				p.Send(ui.ResultMsg(r))
+			}
+			p.Send(ui.DoneMsg{})
+		}()
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintln(os.Stderr, "dashboard error:", err)
+			os.Exit(1)
+		}
+
+	default: // text ve json için
+		shown := 0
+		for r := range resultCh {
+			allResults = append(allResults, r)
+			if r.Category == client.CategoryConnection && shown < 5 {
+				fmt.Println("sample error:", r.Error)
+				shown++
+			}
 		}
 	}
 
-	s := stats.ComputeStats(results, time.Since(start))
+	s := stats.ComputeStats(allResults, time.Since(start))
 	switch format {
 	case "json":
 		if err := stats.PrintJSONReport(s); err != nil {
-			fmt.Println("error: ", err)
+			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
+	case "dashboard":
+		stats.PrintReport(s) // dashboard bittikten sonra özet raporu bas
 	default:
 		stats.PrintReport(s)
 	}

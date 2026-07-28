@@ -18,5 +18,8 @@ func TestRunLoadTest_NoGoroutineLeak(t *testing.T) {
 	defer server.Close()
 
 	httpClient := &http.Client{}
-	_ = RunLoadTest(context.Background(), httpClient, server.URL, "GET", nil, 50, 5, 0)
+	resultCh := RunLoadTest(context.Background(), httpClient, server.URL, "GET", nil, 50, 5, 0)
+
+	for range resultCh {
+	}
 }
