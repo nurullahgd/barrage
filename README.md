@@ -6,7 +6,7 @@ A lightweight, concurrent HTTP load testing tool written in Go.
 
 > Status: early development (v0.5). Not production-ready yet.
 
-<!-- demo GIF coming soon -->
+![barrage demo](demo.gif)
 
 ## Why
 
