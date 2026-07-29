@@ -27,7 +27,9 @@ func main() {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, `{"status":"ok"}`)
+		if _, err := fmt.Fprintln(w, `{"status":"ok"}`); err != nil {
+			http.Error(w, "write error", http.StatusInternalServerError)
+		}
 	})
 
 	srv := &http.Server{

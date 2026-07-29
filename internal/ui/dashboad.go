@@ -134,8 +134,8 @@ func (m Model) histogramView() string {
 		bar := successStyle.Render(strings.Repeat("█", filled)) +
 			dimStyle.Render(strings.Repeat("░", empty))
 
-		sb.WriteString(fmt.Sprintf("  %-9s [%s] %4d (%.0f%%)\n",
-			b.label, bar, b.count, pct))
+		fmt.Fprintf(&sb, "  %-9s [%s] %4d (%.0f%%)\n",
+			b.label, bar, b.count, pct)
 	}
 	return sb.String()
 }
@@ -172,47 +172,46 @@ func (m Model) View() string {
 	sb.WriteString("\n\n")
 
 	// metrikler
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
+	fmt.Fprintf(&sb, "  %s %s\n",
 		labelStyle.Render("Requests/sec"),
-		valueStyle.Render(fmt.Sprintf("%.1f", rps))))
+		valueStyle.Render(fmt.Sprintf("%.1f", rps)))
 
 	successStr := fmt.Sprintf("%d (%.1f%%)", m.Successful, successRate)
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
+	fmt.Fprintf(&sb, "  %s %s\n",
 		labelStyle.Render("Successful  "),
-		successStyle.Render(successStr)))
+		successStyle.Render(successStr))
 
 	failedStr := fmt.Sprintf("%d", m.Failed)
 	failStyle := successStyle
 	if m.Failed > 0 {
 		failStyle = errorStyle
 	}
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
+	fmt.Fprintf(&sb, "  %s %s\n",
 		labelStyle.Render("Failed      "),
-		failStyle.Render(failedStr)))
+		failStyle.Render(failedStr))
 
 	sb.WriteString("\n")
 
 	// latency
 	sb.WriteString(labelStyle.Render("  Latency"))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("    %s  %s\n",
+	fmt.Fprintf(&sb, "    %s  %s\n",
 		labelStyle.Render("p50"),
-		valueStyle.Render(m.p(50).Round(time.Microsecond*10).String())))
-	sb.WriteString(fmt.Sprintf("    %s  %s\n",
+		valueStyle.Render(m.p(50).Round(time.Microsecond*10).String()))
+	fmt.Fprintf(&sb, "    %s  %s\n",
 		labelStyle.Render("p95"),
-		valueStyle.Render(m.p(95).Round(time.Microsecond*10).String())))
-	sb.WriteString(fmt.Sprintf("    %s  %s\n",
+		valueStyle.Render(m.p(95).Round(time.Microsecond*10).String()))
+	fmt.Fprintf(&sb, "    %s  %s\n",
 		labelStyle.Render("p99"),
-		valueStyle.Render(m.p(99).Round(time.Microsecond*10).String())))
+		valueStyle.Render(m.p(99).Round(time.Microsecond*10).String()))
 
 	sb.WriteString(m.histogramView())
 	sb.WriteString("\n")
-	sb.WriteString(dimStyle.Render(fmt.Sprintf("  elapsed %s", elapsed)))
+	fmt.Fprintf(&sb, "  elapsed %s\n", dimStyle.Render(elapsed.String()))
 	sb.WriteString("\n")
 
 	if !m.Done {
-		sb.WriteString(dimStyle.Render("  press ctrl+c to stop"))
-		sb.WriteString("\n")
+		fmt.Fprintf(&sb, "  press ctrl+c to stop\n%s", dimStyle.Render())
 	}
 
 	return sb.String()
