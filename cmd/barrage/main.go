@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,12 +16,14 @@ import (
 	"github.com/nurullahgd/barrage.git/internal/runner"
 	"github.com/nurullahgd/barrage.git/internal/stats"
 	"github.com/nurullahgd/barrage.git/internal/ui"
+	"golang.org/x/net/http2"
 )
 
 func main() {
 	var url, method, bodyStr, format string
 	var totalRequests, workerCount, rate int
 	var duration time.Duration
+	var useHTTP2 bool
 	flag.StringVar(&url, "url", "", "target URL (required)")
 	flag.StringVar(&method, "method", "GET", "http method")
 	flag.StringVar(&bodyStr, "body", "", "request body (raw JSON)")
@@ -28,6 +32,7 @@ func main() {
 	flag.IntVar(&rate, "rate", 0, "requests per second")
 	flag.DurationVar(&duration, "duration", 0, "test duration (e.g. 30s, 2m); 0 = run until requests are exhausted")
 	flag.StringVar(&format, "format", "dashboard", "output format: dashboard, text, json")
+	flag.BoolVar(&useHTTP2, "http2", false, "enable HTTP/2 (h2c for cleartext)")
 	flag.Parse()
 
 	if url == "" {
@@ -48,6 +53,18 @@ func main() {
 	httpClient := &http.Client{
 		Timeout:   10 * time.Second,
 		Transport: transport,
+	}
+	if useHTTP2 {
+		h2Transport := &http2.Transport{
+			AllowHTTP: true, // h2c için şart
+			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, network, addr)
+			},
+		}
+		httpClient = &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: h2Transport,
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)

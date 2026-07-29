@@ -11,11 +11,14 @@ import (
 
 func main() {
 	port := flag.String("port", "8090", "port to listen on")
-	latency := flag.Duration("latency", 0, "simulated latency (e.g. 10ms)")
-	errorRate := flag.Float64("error-rate", 0, "fraction of requests that return 500 (e.g. 0.05 for 5%%)")
+	latency := flag.Duration("latency", 0, "simulated latency")
+	errorRate := flag.Float64("error-rate", 0, "fraction of requests returning 500")
+	useH2C := flag.Bool("h2c", false, "enable HTTP/2 cleartext (h2c)")
 	flag.Parse()
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("proto: %s", r.Proto)
 		if *latency > 0 {
 			time.Sleep(*latency)
 		}
@@ -27,6 +30,17 @@ func main() {
 		fmt.Fprintln(w, `{"status":"ok"}`)
 	})
 
-	log.Printf("mockserver listening on :%s (latency=%s error-rate=%.0f%%)\n", *port, *latency, *errorRate*100)
-	log.Fatal(http.ListenAndServe(":"+*port, nil))
+	srv := &http.Server{
+		Addr:    ":" + *port,
+		Handler: mux,
+	}
+	if *useH2C {
+		srv.Protocols = new(http.Protocols)
+		srv.Protocols.SetHTTP1(true)
+		srv.Protocols.SetUnencryptedHTTP2(true)
+		log.Printf("mockserver listening on :%s (h2c enabled)\n", *port)
+	} else {
+		log.Printf("mockserver listening on :%s\n", *port)
+	}
+	log.Fatal(srv.ListenAndServe())
 }
