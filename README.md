@@ -1,5 +1,7 @@
 # barrage
 
+[![CI](https://github.com/nurullahgd/barrage/actions/workflows/ci.yml/badge.svg)](https://github.com/nurullahgd/barrage/actions/workflows/ci.yml)
+
 A lightweight, concurrent HTTP load testing tool written in Go.
 
 `barrage` fires a controlled stream of concurrent requests at an HTTP endpoint and reports latency, throughput, and error statistics — built to understand real-world concurrency patterns from the inside out, not just to use them.
@@ -129,7 +131,7 @@ Requests/sec:        1420.55
 - [x] v0.4 — JSON output format (`-format json`)
 - [x] v0.5 — Live terminal dashboard (`-format dashboard`, default)
 - [x] v0.6 — Response time histogram in dashboard
-- [ ] v0.7 — HTTP/2 support
+- [x] v0.7 — HTTP/2 support
 - [ ] v1.0 — Stable API, comprehensive test suite, GIF demo
 
 ## Testing
