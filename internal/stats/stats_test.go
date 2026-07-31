@@ -110,3 +110,50 @@ func TestComputeStats(t *testing.T) {
 		t.Errorf("RequestsPerSecond = %v, want 5", got.RequestsPerSecond)
 	}
 }
+
+func TestRound6(t *testing.T) {
+	tests := []struct {
+		input float64
+		want  float64
+	}{
+		{0.0000001234567, 0.000000},
+		{0.001234567, 0.001235},
+		{1.9999999, 2.0},
+	}
+	for _, tt := range tests {
+		got := round6(tt.input)
+		if got != tt.want {
+			t.Errorf("round6(%v) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestToJSON(t *testing.T) {
+	s := Stats{
+		TotalRequests:     10,
+		SuccessCount:      9,
+		ErrorCount:        1,
+		TimeoutCount:      1,
+		MinLatency:        1 * time.Millisecond,
+		MaxLatency:        100 * time.Millisecond,
+		AverageLatency:    50 * time.Millisecond,
+		Percentile50:      45 * time.Millisecond,
+		Percentile95:      90 * time.Millisecond,
+		Percentile99:      99 * time.Millisecond,
+		RequestsPerSecond: 100.0,
+	}
+	got := s.ToJSON()
+
+	if got.TotalRequests != 10 {
+		t.Errorf("TotalRequests = %d, want 10", got.TotalRequests)
+	}
+	if got.Latency.Min != round6(0.001) {
+		t.Errorf("Latency.Min = %v, want %v", got.Latency.Min, round6(0.001))
+	}
+	if got.Latency.Max != round6(0.1) {
+		t.Errorf("Latency.Max = %v, want %v", got.Latency.Max, round6(0.1))
+	}
+	if got.ErrorBreakdown.Timeouts != 1 {
+		t.Errorf("Timeouts = %d, want 1", got.ErrorBreakdown.Timeouts)
+	}
+}
