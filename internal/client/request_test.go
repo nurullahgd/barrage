@@ -1,9 +1,11 @@
 package client
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestDoRequest(t *testing.T) {
@@ -65,5 +67,42 @@ func TestDoRequest_ClientError(t *testing.T) {
 	}
 	if result.Category != CategoryClientError {
 		t.Errorf("DoRequest returned category: %d", result.Category)
+	}
+}
+
+func TestDoRequest_Timeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	httpClient := &http.Client{Timeout: 50 * time.Millisecond}
+	result := DoRequest(httpClient, server.URL, "GET", nil)
+
+	if result.Error == nil {
+		t.Error("expected timeout error, got nil")
+	}
+	if result.Category != CategoryTimeout {
+		t.Errorf("Category = %v, want CategoryTimeout", result.Category)
+	}
+}
+
+func TestDoRequest_WithBody(t *testing.T) {
+	var receivedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	body := []byte(`{"symbol":"BTC"}`)
+	httpClient := &http.Client{}
+	result := DoRequest(httpClient, server.URL, "POST", body)
+
+	if result.Error != nil {
+		t.Errorf("unexpected error: %v", result.Error)
+	}
+	if string(receivedBody) != string(body) {
+		t.Errorf("body = %s, want %s", receivedBody, body)
 	}
 }

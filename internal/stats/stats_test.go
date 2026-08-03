@@ -157,3 +157,10 @@ func TestToJSON(t *testing.T) {
 		t.Errorf("Timeouts = %d, want 1", got.ErrorBreakdown.Timeouts)
 	}
 }
+
+func TestComputeStats_Empty(t *testing.T) {
+	got := ComputeStats([]client.Result{}, 1*time.Second)
+	if got.TotalRequests != 0 {
+		t.Errorf("TotalRequests = %d, want 0", got.TotalRequests)
+	}
+}
