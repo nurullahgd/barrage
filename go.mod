@@ -2,6 +2,8 @@ module github.com/nurullahgd/barrage.git
 
 go 1.26.5
 
+toolchain go1.26.5
+
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
