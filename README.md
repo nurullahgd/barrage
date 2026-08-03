@@ -6,15 +6,13 @@ A lightweight, concurrent HTTP load testing tool written in Go.
 
 `barrage` fires a controlled stream of concurrent requests at an HTTP endpoint and reports latency, throughput, and error statistics — built to understand real-world concurrency patterns from the inside out, not just to use them.
 
-> Status: early development (v0.6). Not production-ready yet.
-
 ![barrage demo](demo.gif)
 
 ## Why
 
 Most load testing tools are black boxes. `barrage` is built from scratch to:
 - Be simple enough to read and extend for your own use cases
-- Support custom payloads, headers, and rate limiting out of the box
+- Support custom payloads, rate limiting, and HTTP/2 out of the box
 - Show a live terminal dashboard while the test runs
 - Serve as a hands-on exploration of Go concurrency (goroutines, channels, worker pools, generics)
 
@@ -29,7 +27,7 @@ Or build from source:
 ```bash
 git clone https://github.com/nurullahgd/barrage.git
 cd barrage
-go build -o barrage ./cmd/barrage
+make build
 ```
 
 ## Quick start
@@ -44,11 +42,12 @@ go run ./cmd/barrage -url http://localhost:8090 -requests 1000 -workers 20 -rate
 
 ### Mock server flags
 
-| Flag           | Description                                              | Default |
-|----------------|----------------------------------------------------------|---------|
-| `-port`        | Port to listen on                                        | `8090`  |
-| `-latency`     | Simulated response latency (e.g. `10ms`)                 | `0`     |
-| `-error-rate`  | Fraction of requests returning 500 (e.g. `0.05` for 5%) | `0`     |
+| Flag          | Description                                              | Default |
+|---------------|----------------------------------------------------------|---------|
+| `-port`       | Port to listen on                                        | `8090`  |
+| `-latency`    | Simulated response latency (e.g. `10ms`)                 | `0`     |
+| `-error-rate` | Fraction of requests returning 500 (e.g. `0.05` for 5%) | `0`     |
+| `-h2c`        | Enable HTTP/2 cleartext mode                             | `false` |
 
 ## Usage
 
@@ -64,16 +63,17 @@ barrage -url http://localhost:8090 \
 
 ### Flags
 
-| Flag        | Description                                                        | Default     |
-|-------------|---------------------------------------------------------------------|-------------|
-| `-url`      | Target URL (required)                                               | —           |
-| `-method`   | HTTP method                                                         | `GET`       |
-| `-body`     | Request body (raw JSON string)                                      | —           |
-| `-requests` | Total number of requests to send                                    | `20`        |
-| `-workers`  | Max concurrent in-flight requests                                   | `5`         |
-| `-rate`     | Requests per second (`0` = as fast as workers allow)                | `0`         |
-| `-duration` | Test duration (e.g. `30s`, `2m`); `0` = run until requests are exhausted | `0`   |
-| `-format`   | Output format: `dashboard`, `text`, `json`                          | `dashboard` |
+| Flag        | Description                                                              | Default     |
+|-------------|--------------------------------------------------------------------------|-------------|
+| `-url`      | Target URL (required)                                                    | —           |
+| `-method`   | HTTP method                                                              | `GET`       |
+| `-body`     | Request body (raw JSON string)                                           | —           |
+| `-requests` | Total number of requests to send                                         | `20`        |
+| `-workers`  | Max concurrent in-flight requests                                        | `5`         |
+| `-rate`     | Requests per second (`0` = as fast as workers allow)                     | `0`         |
+| `-duration` | Test duration (e.g. `30s`, `2m`); `0` = run until requests are exhausted | `0`        |
+| `-format`   | Output format: `dashboard`, `text`, `json`                               | `dashboard` |
+| `-http2`    | Enable HTTP/2 (h2c for cleartext)                                        | `false`     |
 
 ### Example output (text)
 
@@ -122,6 +122,36 @@ Requests/sec:        1420.55
 }
 ```
 
+## Development
+
+```bash
+make build        # build barrage binary
+make build-mock   # build mockserver binary
+make test         # run tests with -race
+make test-cover   # run tests + open coverage report
+make vet          # go vet
+make lint         # golangci-lint
+make vuln         # govulncheck
+make check        # vet + lint + vuln + test (CI equivalent)
+make run-mock     # start mock server on :8090
+make run-example  # run barrage against mock server
+make clean        # remove build artifacts
+```
+
+## Testing
+
+```bash
+make test
+```
+
+Covers:
+- Table-driven tests for the generic `Percentile` function and `ComputeStats`
+- `httptest`-based integration tests for `DoRequest` (success, 4xx, 5xx, timeout, body forwarding)
+- Goroutine-leak test via [goleak](https://github.com/uber-go/goleak) verifying the worker pool cleans up correctly
+- Context cancellation test verifying job feeding stops on `cancel()`
+- Bubbletea `Model.Update` unit tests (result counting, done signal)
+- `Stats.ToJSON()` and `round6` unit tests
+
 ## Roadmap
 
 - [x] v0.1 — Fixed worker pool, latency report (min/avg/max), percentile stats (p50/p95/p99)
@@ -130,20 +160,9 @@ Requests/sec:        1420.55
 - [x] v0.3 — Duration-based runs (`-duration`) + graceful shutdown on Ctrl+C
 - [x] v0.4 — JSON output format (`-format json`)
 - [x] v0.5 — Live terminal dashboard (`-format dashboard`, default)
-- [x] v0.6 — Response time histogram in dashboard
-- [x] v0.7 — HTTP/2 support
-- [ ] v1.0 — Stable API, comprehensive test suite, GIF demo
-
-## Testing
-
-```bash
-go test ./... -race
-```
-
-Covers:
-- Table-driven tests for the generic `Percentile` function and `ComputeStats`
-- `httptest`-based tests for `DoRequest` across success / 4xx / 5xx paths
-- A goroutine-leak test (via [goleak](https://github.com/uber-go/goleak)) verifying the worker pool cleans up correctly
+- [x] v0.6 — Latency distribution histogram in dashboard
+- [x] v0.7 — HTTP/2 support (`-http2`, `-h2c`)
+- [x] v1.0 — Stable API, comprehensive test suite, CI, Makefile, CHANGELOG
 
 ## How it works
 
@@ -151,7 +170,7 @@ Covers:
 
 ## Contributing
 
-This is primarily a learning project, but issues, suggestions, and PRs are welcome.
+Issues, suggestions, and PRs are welcome.
 
 ## License
 
